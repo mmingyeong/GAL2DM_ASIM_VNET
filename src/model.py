@@ -5,6 +5,11 @@ UNet3D (volumetric regression)
 - Fully parameterized input/output channels: UNet3D(in_ch=..., out_ch=...)
 - Final skip connects decoder to the original input with 'in_ch' channels.
 - Kaiming init for Conv3d; BatchNorm3d(γ=1, β=0); Identity head for regression.
+
+Reference:
+    Inspired by the V-Net and U-Net architectures for 3D medical image segmentation and adapted for scientific data modeling.
+    Adapted from the TensorFlow architecture script:
+    https://github.com/redeostm/ML_LocalEnv/blob/main/generatorSingle.py
 """
 
 from __future__ import annotations
@@ -79,7 +84,7 @@ class UNet3D(nn.Module):
     ------------
     (B, out_ch, D, H, W)
     """
-    def __init__(self, in_ch: int = 2, out_ch: int = 1):
+    def __init__(self, in_ch: int = 2, out_ch: int = 1, BASE: int = 32):
         super().__init__()
         if in_ch < 1:
             raise ValueError(f"in_ch must be >= 1, got {in_ch}")
@@ -87,20 +92,20 @@ class UNet3D(nn.Module):
             raise ValueError(f"out_ch must be >= 1, got {out_ch}")
 
         # Encoder
-        self.enc1 = ConvBlockEnc(in_ch,   32)   # (D,H,W) -> /2
-        self.enc2 = ConvBlockEnc(32,      64)   # -> /4
-        self.enc3 = ConvBlockEnc(64,      128)  # -> /8
-        self.enc4 = ConvBlockEnc(128,     256)  # -> /16
-        self.enc5 = ConvBlockEnc(256,     512)  # -> /32 (bottleneck in)
+        self.enc1 = ConvBlockEnc(in_ch,        BASE)
+        self.enc2 = ConvBlockEnc(BASE,         BASE*2)
+        self.enc3 = ConvBlockEnc(BASE*2,       BASE*4)
+        self.enc4 = ConvBlockEnc(BASE*4,       BASE*8)
+        self.enc5 = ConvBlockEnc(BASE*8,       BASE*16)
 
         # Decoder (concat with encoder skips)
-        self.dec4 = ConvBlockDec(512 + 256, 256)
-        self.dec3 = ConvBlockDec(256 + 128, 128)
-        self.dec2 = ConvBlockDec(128 + 64,   64)
-        self.dec1 = ConvBlockDec(64  + 32,   32)
+        self.dec4 = ConvBlockDec(BASE*16 + BASE*8, BASE*8)
+        self.dec3 = ConvBlockDec(BASE*8 + BASE*4,  BASE*4)
+        self.dec2 = ConvBlockDec(BASE*4 + BASE*2,  BASE*2)
+        self.dec1 = ConvBlockDec(BASE*2 + BASE,   BASE)
 
         # Final: concat with original input (skip from very first stage)
-        self.out  = ConvBlockDec(32 + in_ch, out_ch)
+        self.out  = ConvBlockDec(BASE + in_ch, out_ch)
 
         # Identity head (linear) for regression
         self.final_activation = nn.Identity()
