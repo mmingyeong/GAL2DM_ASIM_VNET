@@ -474,7 +474,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_augmentation", action="store_true")
 
     # Validation & file filtering
-    parser.add_argument("--validate_keys", type=str2bool, default=True)
+    parser.add_argument("--validate_keys", type=str2bool, default=False)
     parser.add_argument("--exclude_list", type=str, default=None)
     parser.add_argument("--include_list", type=str, default=None)
 
