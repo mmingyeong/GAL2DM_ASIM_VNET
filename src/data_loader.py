@@ -421,14 +421,14 @@ def get_dataloader(
     # (0) Hardcoded auto-exclude list (known broken files)
     # ----------------------------
     AUTO_EXCLUDE = {
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1264.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1265.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1266.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10248.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10249.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10250.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10251.hdf5",
-        "/scratch/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10252.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1264.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1265.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/test/1266.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10248.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10249.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10250.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10251.hdf5",
+        "/gpfs/adupuy/cosmicweb_asim/ASIM_TSC/samples/training/10252.hdf5",
     }
 
     before_auto = len(files)

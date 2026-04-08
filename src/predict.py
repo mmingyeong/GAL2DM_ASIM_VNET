@@ -255,7 +255,9 @@ def run_prediction(
             src_path = file_paths[idx]
             filename = os.path.basename(src_path)
             output_path = os.path.join(output_dir, filename)
-
+            if os.path.exists(output_path):
+                logger.info(f"[SKIP] Already exists: {output_path}")
+                continue
             x = x.to(dev, non_blocking=True)  # [B,2,D,H,W] from data_loader
             x = select_inputs(x, input_case, keep_two_channels)  # -> [B,in_ch,D,H,W]
 

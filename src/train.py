@@ -238,11 +238,13 @@ def train(args):
     else:
         in_ch = 2 if args.keep_two_channels else 1
 
-    model = UNet3D(in_ch=in_ch, out_ch=1).to(args.device)
+    model = UNet3D(in_ch=in_ch, out_ch=1, BASE=args.vnet_base).to(args.device)
     logger.info(
         f"🧱 Model created: UNet3D(in_ch={in_ch}, out_ch=1) | "
         f"input_case={args.input_case}, keep_two={args.keep_two_channels}"
     )
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"Trainable params: {num_params/1e6:.2f}M")
 
     # ---- Optimizer / AMP ----
     use_amp = args.amp and str(args.device).startswith("cuda")
@@ -480,6 +482,7 @@ if __name__ == "__main__":
 
     # Optuna driver output
     parser.add_argument("--out_metrics", type=str, default=None)
+    parser.add_argument("--vnet_base", type=int, default=32)
 
     args = parser.parse_args()
 
