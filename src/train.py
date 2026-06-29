@@ -23,6 +23,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, ConstantLR, CosineAnnealingLR
 from tqdm import tqdm
 import pandas as pd
+import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from src.data_loader import get_dataloader
@@ -33,6 +34,12 @@ from src.model import UNet3D
 # ----------------------------
 # Utilities
 # ----------------------------
+DTYPE_MAP = {
+    "float32": torch.float32,
+    "float64": torch.float64,
+}
+
+
 class EarlyStopping:
     def __init__(self, patience: int = 10, delta: float = 0.0):
         self.patience = patience
@@ -169,7 +176,12 @@ def train(args):
     logger = get_logger("train_unet3d")
     set_seed(args.seed, deterministic=args.deterministic)
     logger.info("🚀 Starting UNet3D training for 3D voxel-wise regression")
+    start_time = time.time()
     logger.info(f"Args: {vars(args)}")
+
+    # ---- dtype ----
+    torch_dtype = DTYPE_MAP[args.dtype]
+    logger.info(f"🧬 Using dtype: {torch_dtype}")
 
     # ---- Normalization / Augmentation configs ----
     normalization_cfg = {
@@ -198,7 +210,7 @@ def train(args):
         target_field=args.target_field,
         train_val_split=args.train_val_split,
         sample_fraction=args.sample_fraction,
-        dtype=torch.float32,
+        dtype=torch_dtype,
         seed=args.seed,
         validate_keys=args.validate_keys,
         strict=False,
@@ -218,7 +230,7 @@ def train(args):
         target_field=args.target_field,
         train_val_split=args.train_val_split,
         sample_fraction=1.0,
-        dtype=torch.float32,
+        dtype=torch_dtype,
         seed=args.seed,
         validate_keys=args.validate_keys,
         strict=False,
@@ -238,16 +250,21 @@ def train(args):
     else:
         in_ch = 2 if args.keep_two_channels else 1
 
-    model = UNet3D(in_ch=in_ch, out_ch=1, BASE=args.vnet_base).to(args.device)
+    model = UNet3D(in_ch=in_ch, out_ch=1, BASE=args.vnet_base).to(
+        device=args.device,
+        dtype=torch_dtype,
+    )
     logger.info(
         f"🧱 Model created: UNet3D(in_ch={in_ch}, out_ch=1) | "
-        f"input_case={args.input_case}, keep_two={args.keep_two_channels}"
+        f"input_case={args.input_case}, keep_two={args.keep_two_channels} | dtype={torch_dtype}"
     )
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Trainable params: {num_params/1e6:.2f}M")
 
     # ---- Optimizer / AMP ----
-    use_amp = args.amp and str(args.device).startswith("cuda")
+    use_amp = args.amp and str(args.device).startswith("cuda") and (torch_dtype == torch.float32)
+    if args.amp and torch_dtype != torch.float32:
+        logger.warning("⚠️ AMP requested, but dtype is not float32. AMP will be disabled.")
     optimizer = Adam(model.parameters(), lr=args.max_lr)
 
     # ✅ AMP Compatibility Wrapper
@@ -303,9 +320,10 @@ def train(args):
     aug_tag = "augON" if args.use_augmentation else "augOFF"
     norm_tag = "normCUSTOM" if normalization_cfg.get("mode", "none") != "none" else "normNONE"
     sched_tag = f"{args.scheduler_type}_wu{args.warmup_ratio:.3f}_minr{args.min_lr_ratio:.2e}"
+    dtype_tag = f"dtype-{args.dtype}"
 
     model_prefix = (
-        f"{case_tag}_unet3d_{aug_tag}_{norm_tag}_tgt-{args.target_field}_"
+        f"{case_tag}_unet3d_{aug_tag}_{norm_tag}_{dtype_tag}_tgt-{args.target_field}_"
         f"bs{args.batch_size}_acc{accum}_eff{eff_bs}_{sched_tag}_maxlr{args.max_lr:.2e}_"
         f"s{args.seed}_smp{sample_percent}"
     )
@@ -326,10 +344,16 @@ def train(args):
         optimizer.zero_grad(set_to_none=True)
 
         for step, (x, y) in enumerate(loop):
-            x = x.to(args.device, non_blocking=True)
-            y = y.to(args.device, non_blocking=True)
+            x = x.to(device=args.device, dtype=torch_dtype, non_blocking=True)
+            y = y.to(device=args.device, dtype=torch_dtype, non_blocking=True)
 
             x = select_inputs(x, args.input_case, args.keep_two_channels)
+
+            if epoch == 0 and step == 0:
+                logger.info(
+                    f"🔎 dtype check | model={next(model.parameters()).dtype} | "
+                    f"input={x.dtype} | target={y.dtype}"
+                )
 
             with amp_autocast():
                 pred = model(x)
@@ -377,8 +401,8 @@ def train(args):
         val_loss = 0.0
         with torch.no_grad():
             for x_val, y_val in val_loader:
-                x_val = x_val.to(args.device, non_blocking=True)
-                y_val = y_val.to(args.device, non_blocking=True)
+                x_val = x_val.to(device=args.device, dtype=torch_dtype, non_blocking=True)
+                y_val = y_val.to(device=args.device, dtype=torch_dtype, non_blocking=True)
 
                 x_val = select_inputs(x_val, args.input_case, args.keep_two_channels)
 
@@ -412,6 +436,16 @@ def train(args):
     logger.info(f"📦 Final model saved: {final_model_path}")
     logger.info(f"📝 Training log saved: {log_path}")
 
+    end_time = time.time()
+    elapsed = end_time - start_time
+
+    # 시/분/초 변환
+    hours = int(elapsed // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    seconds = int(elapsed % 60)
+
+    logger.info(f"⏱️ Total training time: {hours:02d}:{minutes:02d}:{seconds:02d} (HH:MM:SS)")
+
     # ---- Optuna metrics JSON (minimal) ----
     metrics_payload = {
         "model": "UNet3D",
@@ -427,6 +461,7 @@ def train(args):
         "seed": int(args.seed),
         "epochs_ran": int(log_records[-1]["epoch"]) if log_records else 0,
         "global_updates": int(global_update),
+        "dtype": args.dtype,
     }
     maybe_write_metrics(args.out_metrics, metrics_payload, logger)
 
@@ -467,6 +502,15 @@ if __name__ == "__main__":
     parser.add_argument("--deterministic", action="store_true")
     parser.add_argument("--amp", action="store_true")
     parser.add_argument("--grad_accum_steps", type=int, default=1)
+
+    # dtype
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        choices=["float32", "float64"],
+        default="float32",
+        help="Computation dtype for dataloader, model, and train/val tensors.",
+    )
 
     # Input ablations
     parser.add_argument("--input_case", type=str, choices=["both", "ch1", "ch2"], default="both")

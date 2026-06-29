@@ -187,6 +187,14 @@ class UNet3D(nn.Module):
         if x.ndim != 5:
             raise ValueError(f"Expected 5D input (B,C,D,H,W), got shape {tuple(x.shape)}")
 
+        # 🔥 dtype consistency check (NEW)
+        param_dtype = next(self.parameters()).dtype
+        if x.dtype != param_dtype:
+            raise RuntimeError(
+                f"dtype mismatch: input={x.dtype}, model={param_dtype}. "
+                f"Call model.to(dtype=...) or x.to(dtype=...)."
+            )
+
         x1 = x
         x2 = self.enc1(x1)
         x3 = self.enc2(x2)
